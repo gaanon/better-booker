@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 import argparse
+import httpx
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright
@@ -11,8 +12,32 @@ load_dotenv()
 USER = os.getenv("BETTER_USER")
 PASS = os.getenv("BETTER_PASS")
 LOCATION = os.getenv("BETTER_LOCATION", "barnet-copthall-leisure-centre")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 BASE_URL = f"https://bookings.better.org.uk/location/{LOCATION}"
+
+async def send_telegram_message(message):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram configuration missing. Skipping notification.")
+        return
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML"
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload)
+            if response.status_code != 200:
+                print(f"Telegram API Error: {response.status_code} - {response.text}")
+            response.raise_for_status()
+            print("Telegram notification sent successfully.")
+    except Exception as e:
+        print(f"Failed to send Telegram notification: {e}")
 
 async def login(page):
     if not USER or not PASS:
@@ -128,6 +153,7 @@ async def main():
     parser.add_argument("--range", action="store_true", help="Check 6-day range starting today")
     parser.add_argument("--after", default="17:30", help="Filter slots after this time (weekdays only, HH:MM)")
     parser.add_argument("--all", action="store_true", help="Show all slots, ignore time filter")
+    parser.add_argument("--telegram", action="store_true", help="Send results to Telegram")
     args = parser.parse_args()
 
     # Determine dates to check
@@ -148,6 +174,7 @@ async def main():
         # Login is not needed for checking slots, preserved for future booking automation
         # await login(page)
 
+        telegram_report = ""
         for date_str in dates_to_check:
             dt_obj = datetime.strptime(date_str, "%Y-%m-%d")
             is_weekend = dt_obj.weekday() >= 5
@@ -178,6 +205,17 @@ async def main():
                     print(f"[{slot['type'].replace('pickleball-', '')}] {slot['time']} - {slot['spaces']}")
                 if filtered_count > 0:
                     print(f"({filtered_count} earlier slots hidden on this weekday. Use --all to see them.)")
+            
+            if args.telegram and visible_slots:
+                telegram_report += f"\n<b>{day_name} {date_str}</b>\n"
+                for slot in visible_slots:
+                    telegram_report += f"• [{slot['type'].replace('pickleball-', '')}] {slot['time']} - {slot['spaces']}\n"
+
+        if args.telegram:
+            if telegram_report:
+                await send_telegram_message(f"🏸 <b>Pickleball Slots Found:</b>\n{telegram_report}")
+            else:
+                print("No slots to send to Telegram.")
 
         await browser.close()
 
