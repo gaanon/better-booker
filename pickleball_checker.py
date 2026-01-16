@@ -150,9 +150,8 @@ def is_filtered(time_str, filter_time, is_weekend):
 async def main():
     parser = argparse.ArgumentParser(description="Pickleball Slot Checker")
     parser.add_argument("--date", help="Specific date to check (YYYY-MM-DD)")
-    parser.add_argument("--range", action="store_true", help="Check 6-day range starting today")
-    parser.add_argument("--after", default="17:30", help="Filter slots after this time (weekdays only, HH:MM)")
-    parser.add_argument("--all", action="store_true", help="Show all slots, ignore time filter")
+    parser.add_argument("--range", action="store_true", help="Check 7-day range starting today")
+    parser.add_argument("--after", help="Optional: filter slots after this time (weekdays only, HH:MM)")
     parser.add_argument("--telegram", action="store_true", help="Send results to Telegram")
     args = parser.parse_args()
 
@@ -188,23 +187,17 @@ async def main():
 
             # Filter slots
             visible_slots = []
-            filtered_count = 0
-            
             for s in all_slots:
-                if args.all or not is_filtered(s['time'], args.after, is_weekend):
+                if not args.after or not is_filtered(s['time'], args.after, is_weekend):
                     visible_slots.append(s)
-                else:
-                    filtered_count += 1
 
             if not all_slots:
                 print("No free slots found.")
             elif not visible_slots:
-                print(f"No slots found after {args.after} ({filtered_count} earlier slots hidden).")
+                print(f"No slots found after {args.after}.")
             else:
                 for slot in visible_slots:
                     print(f"[{slot['type'].replace('pickleball-', '')}] {slot['time']} - {slot['spaces']}")
-                if filtered_count > 0:
-                    print(f"({filtered_count} earlier slots hidden on this weekday. Use --all to see them.)")
             
             if args.telegram and visible_slots:
                 telegram_report += f"\n<b>{day_name} {date_str}</b>\n"
