@@ -80,6 +80,36 @@ python3 telegram_bot.py
 - Send `/check` to your bot to trigger a 7-day search instantly.
 - Send `/weekends` to only see Saturday/Sunday slots for the next 7 days.
 - Send `/help` to see the command list.
+- **Important (Linux/Pi)**: If running on Linux, you may need to run `playwright install-deps` to ensure all browser dependencies are installed.
+
+## Running 24/7 on Raspberry Pi (systemd)
+
+To ensure the bot stays running after restarts or crashes, set it up as a service:
+
+1.  **Create a service file**:
+    ```bash
+    sudo nano /etc/systemd/system/pickleball-bot.service
+    ```
+2.  **Paste the configuration** (adjust `/home/pi/better-booker` to your path):
+    ```ini
+    [Unit]
+    Description=Pickleball Telegram Bot
+    After=network.target
+
+    [Service]
+    User=pi
+    WorkingDirectory=/home/pi/better-booker
+    ExecStart=/home/pi/better-booker/venv/bin/python telegram_bot.py
+    Restart=always
+
+    [Install]
+    WantedBy=multi-user.target
+    ```
+3.  **Start and Enable**:
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now pickleball-bot
+    ```
 
 ## How to get Telegram Credentials
 1.  Message [@BotFather](https://t.me/botfather) to create a bot and get your `TELEGRAM_TOKEN`.
