@@ -72,6 +72,15 @@ python3 pickleball_checker.py --range --after 18:00
 python3 pickleball_checker.py --range --telegram
 ```
 
+### 5. Run the Telegram Bot (On-Demand Trigger)
+This script stays running and listens for your commands in Telegram.
+```bash
+python3 telegram_bot.py
+```
+- Send `/check` to your bot to trigger a 7-day search instantly.
+- Send `/weekends` to only see Saturday/Sunday slots for the next 7 days.
+- Send `/help` to see the command list.
+
 ## How to get Telegram Credentials
 1.  Message [@BotFather](https://t.me/botfather) to create a bot and get your `TELEGRAM_TOKEN`.
 2.  Message [@userinfobot](https://t.me/userinfobot) to get your `TELEGRAM_CHAT_ID`.

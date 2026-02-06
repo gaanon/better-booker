@@ -147,31 +147,36 @@ def is_filtered(time_str, filter_time, is_weekend):
     except:
         return False
 
-async def main():
-    parser = argparse.ArgumentParser(description="Pickleball Slot Checker")
-    parser.add_argument("--date", help="Specific date to check (YYYY-MM-DD)")
-    parser.add_argument("--range", action="store_true", help="Check 7-day range starting today")
-    parser.add_argument("--after", help="Optional: filter slots after this time (weekdays only, HH:MM)")
-    parser.add_argument("--telegram", action="store_true", help="Send results to Telegram")
-    args = parser.parse_args()
-
+async def run_check(date_val=None, use_range=False, after_time=None, send_to_telegram=False, weekends_only=False):
+    """
+    Core logic to check for pickleball slots.
+    Returns the report string.
+    """
     # Determine dates to check
     dates_to_check = []
-    if args.range:
+    if use_range:
         today = datetime.now()
         dates_to_check = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
-    elif args.date:
-        dates_to_check = [args.date]
+    elif date_val:
+        dates_to_check = [date_val]
     else:
         dates_to_check = [datetime.now().strftime("%Y-%m-%d")]
 
+    # Apply weekend filter if requested
+    if weekends_only:
+        filtered_dates = []
+        for d in dates_to_check:
+            if datetime.strptime(d, "%Y-%m-%d").weekday() >= 5:
+                filtered_dates.append(d)
+        dates_to_check = filtered_dates
+        if not dates_to_check:
+            return "No weekend dates found in the specified range."
+
+    report = ""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context()
         page = await context.new_page()
-
-        # Login is not needed for checking slots, preserved for future booking automation
-        # await login(page)
 
         telegram_report = ""
         for date_str in dates_to_check:
@@ -188,29 +193,49 @@ async def main():
             # Filter slots
             visible_slots = []
             for s in all_slots:
-                if not args.after or not is_filtered(s['time'], args.after, is_weekend):
+                if not after_time or not is_filtered(s['time'], after_time, is_weekend):
                     visible_slots.append(s)
 
             if not all_slots:
                 print("No free slots found.")
             elif not visible_slots:
-                print(f"No slots found after {args.after}.")
+                print(f"No slots found after {after_time}.")
             else:
                 for slot in visible_slots:
                     print(f"[{slot['type'].replace('pickleball-', '')}] {slot['time']} - {slot['spaces']}")
             
-            if args.telegram and visible_slots:
+            if visible_slots:
                 telegram_report += f"\n<b>{day_name} {date_str}</b>\n"
                 for slot in visible_slots:
                     telegram_report += f"• [{slot['type'].replace('pickleball-', '')}] {slot['time']} - {slot['spaces']}\n"
 
-        if args.telegram:
-            if telegram_report:
-                await send_telegram_message(f"🏸 <b>Pickleball Slots Found:</b>\n{telegram_report}")
-            else:
-                print("No slots to send to Telegram.")
+        if telegram_report:
+            report = f"🏸 <b>Pickleball Slots Found:</b>\n{telegram_report}"
+            if send_to_telegram:
+                await send_telegram_message(report)
+        else:
+            print("No slots found.")
+            report = "No pickleball slots found."
 
         await browser.close()
+    return report
+
+async def main():
+    parser = argparse.ArgumentParser(description="Pickleball Slot Checker")
+    parser.add_argument("--date", help="Specific date to check (YYYY-MM-DD)")
+    parser.add_argument("--range", action="store_true", help="Check 7-day range starting today")
+    parser.add_argument("--weekends", action="store_true", help="Filter for only weekend slots")
+    parser.add_argument("--after", help="Optional: filter slots after this time (weekdays only, HH:MM)")
+    parser.add_argument("--telegram", action="store_true", help="Send results to Telegram")
+    args = parser.parse_args()
+
+    await run_check(
+        date_val=args.date,
+        use_range=args.range,
+        after_time=args.after,
+        send_to_telegram=args.telegram,
+        weekends_only=args.weekends
+    )
 
 if __name__ == "__main__":
     asyncio.run(main())
